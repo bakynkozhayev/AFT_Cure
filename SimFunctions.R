@@ -47,31 +47,87 @@ sim_cure_Weibull <- \(
              X = X)
 }
 
-# functions to simulate datasets and fit various models=========================
-# aft mixture cure with constrained splines on right boundary
-sim_sets <-
+# function to simulate datasets and fit the models =============================
+sim_fits <-
   \(
+    sce = 1,
+    df = 2,
     n_datasets = 1e3,
     n_obs = 1e4,
-    shape = c(1, 1),
-    scale = scale_tr(c(1, 1), c(1, 1)),
-    mixing_par = 0.5,
     cure_frac = 0.1,
+    # mixture cure flag
+    mixture = TRUE,
+    # flag for spline constraint on the right boundary
+    asymp = FALSE,
     beta = 1,
     theta = NULL,
-    cf_dep = FALSE,
-    mixture = TRUE, # mixture cure flag
-    asympt = FALSE # constrained splines on the right boundary flag
+    cf_dep = FALSE
   ) {
-    pbmcmapply(FUN)
-    dat <- sim_cure_Weibull(n = n_obs,
-                            shape = shape,
-                            scale = scale,
-                            mixing_par = mixing_par,
-                            cure_frac = cure_frac,
-                            beta = beta,
-                            theta = theta,
-                            cf_dep = cf_dep
-                            )
-    fit <- ifelse()
-  } 
+    # scenarios 1-4 ====
+    dist <-
+      switch(
+        sce,
+        
+        list(
+          mixing_par = 0.8,
+          shape = c(3, 0.7),
+          scale = scale_tr(c(0.1, 0.1), c(3, 1.6))
+        ),
+        list(
+          mixing_par = 0.5,
+          shape = c(3, 0.7),
+          scale = scale_tr(c(1, 1), c(1.5, 0.5))
+        ),
+        list(
+          mixing_par = 0.26,
+          shape = c(3, 0.7),
+          scale = scale_tr(c(0.02, 0.5), c(3, 0.7))
+        ),
+        list(
+          mixing_par = 0.5,
+          shape = c(1.2, 1.2),
+          scale = scale_tr(c(0.1, 0.1), c(1.2, 1.2))
+        )
+      )
+    # ====
+    datasets <- list()
+    for (dataset in 1:n_datasets) {
+      dat <- sim_cure_Weibull(
+        n = n_obs,
+        shape = dist$shape,
+        scale = dist$scale,
+        mixing_par = dist$mixing_par,
+        cure_frac = cure_frac,
+        beta = beta,
+        theta = theta,
+        cf_dep = cf_dep
+      )
+      datasets[dataset] <- dat
+    }
+    for (dataset in 1:n_datasets) {
+      fit <- aft_mixture(
+        Surv(observed_time, delta) ~ X,
+        data = datasets[[dataset]],
+        df = df,
+        mixture = mixture,
+        cure = asymp,
+        use.gr = TRUE
+      )
+    }
+  }
+test <-
+  t(as.data.frame(
+    sim_fits(1, 2, 10, 1e3, 0.1, TRUE, FALSE),
+    row.names = c(
+      "sim_number",
+      "bias_beta",
+      "bias_relative beta",
+      "coverage_beta",
+      "bias_cure frac",
+      "bias_relative_cure_frac",
+      "coverage_cure_frac",
+      "AIC",
+      "BIC"
+    ),
+    fix.empty.names = FALSE
+  ))
