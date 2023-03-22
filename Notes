@@ -6,3 +6,7 @@ scenario 3
   mixing_par = 0.26, shape = c(3,0.7), scale = t_scale(c(0.02,0.5),c(3,0.7))
 scenario 4
   mixing_par = 0.5, shape = c(1.2, 1.2), scale = t_scale(c(0.1, 0.1), c(1.2, 1.2))  
+
+
+# what else to record on sims
+  

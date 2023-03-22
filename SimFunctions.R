@@ -52,8 +52,8 @@ sim_fits <-
   \(
     sce = 1,
     df = 2,
-    n_datasets = 1e3,
-    n_obs = 1e4,
+    n_datasets = 1e2,
+    n_obs = 1e3,
     cure_frac = 0.1,
     # mixture cure flag
     mixture = TRUE,
@@ -63,7 +63,7 @@ sim_fits <-
     theta = NULL,
     cf_dep = FALSE
   ) {
-    # scenarios 1-4 ====
+    # distributional params for scenarios 1-4 ====
     dist <-
       switch(
         sce,
@@ -89,8 +89,19 @@ sim_fits <-
           scale = scale_tr(c(0.1, 0.1), c(1.2, 1.2))
         )
       )
-    # ====
-    datasets <- list()
+    # generate datasets in list====
+    datasets <<- list()
+    sce <<- data.frame(
+      sim_num = integer(),
+      bias_beta = double(),
+      bias_relative_beta = double(),
+      bias_cure_frac = double(),
+      bias_relative_cure_frac = double(),
+      coverage_beta = double(),
+      coverage_cure_frac = double(),
+      AIC = double(),
+      BIC = double()
+    )
     for (dataset in 1:n_datasets) {
       dat <- sim_cure_Weibull(
         n = n_obs,
@@ -102,10 +113,13 @@ sim_fits <-
         theta = theta,
         cf_dep = cf_dep
       )
-      datasets[dataset] <- dat
+      datasets[[dataset]] <<- dat
     }
+
+    # fit model ====
+
     for (dataset in 1:n_datasets) {
-      fit <- aft_mixture(
+      fit <- aft(
         Surv(observed_time, delta) ~ X,
         data = datasets[[dataset]],
         df = df,
@@ -113,21 +127,43 @@ sim_fits <-
         cure = asymp,
         use.gr = TRUE
       )
+      # post estimation ====
+      bias_beta <- as.numeric(beta - coef(fit)[1])
+      bias_relative_beta <-
+        as.numeric((coef(fit)[1] - beta) / beta * 100)
+      
+      bias_cure_frac <- cure_frac - expit(coef(fit)[2])
+      bias_relative_cure_frac <-
+        (expit(coef(fit)[2]) - cure_frac) / cure_frac * 100
+      
+      coverage_beta <- beta  <=
+        as.numeric(coef(fit)[1]) + qnorm(0.975) * sqrt(fit@vcov[1, 1]) &
+        beta >= as.numeric(coef(fit)[1]) + qnorm(0.025) * sqrt(fit@vcov[1, 1])
+      
+      coverage_cure_frac <- cure_frac <=
+        expit(as.numeric(coef(fit)[2]) + qnorm(0.975) * sqrt(fit@vcov[2, 2])) &
+        cure_frac >=
+        expit(as.numeric(coef(fit)[2]) + qnorm(0.025) * sqrt(fit@vcov[2, 2]))
+      
+      
+      AIC <- AIC(fit)
+      BIC <- BIC(fit)
+      sce <<- rbind(
+        sce,
+        c(
+          as.integer(dataset),
+          bias_beta,
+          bias_relative_beta,
+          coverage_beta,
+          bias_cure_frac,
+          bias_relative_cure_frac,
+          coverage_cure_frac,
+          AIC,
+          BIC
+        )
+      )
+      
+      
     }
   }
-test <-
-  t(as.data.frame(
-    sim_fits(1, 2, 10, 1e3, 0.1, TRUE, FALSE),
-    row.names = c(
-      "sim_number",
-      "bias_beta",
-      "bias_relative beta",
-      "coverage_beta",
-      "bias_cure frac",
-      "bias_relative_cure_frac",
-      "coverage_cure_frac",
-      "AIC",
-      "BIC"
-    ),
-    fix.empty.names = FALSE
-  ))
+sim_fits()
