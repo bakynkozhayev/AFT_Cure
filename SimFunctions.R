@@ -1,6 +1,7 @@
 library(rstpm2)
 library(pbmcapply)
 library(parallel)
+
 # functions ====================================================================
 logit <- \(x) ln(p) - ln(1 - p)
 expit <- \(x) 1 / (1 + exp(-x))
@@ -52,13 +53,13 @@ sim_fits <-
   \(
     sce = 1,
     df = 2,
-    n_datasets = 1e2,
+    n_datasets = 10,
     n_obs = 1e3,
-    cure_frac = 0.1,
+    cure_frac = 0.9,
     # mixture cure flag
     mixture = TRUE,
     # flag for spline constraint on the right boundary
-    asymp = FALSE,
+    asymp = TRUE,
     beta = 1,
     theta = NULL,
     cf_dep = FALSE
@@ -90,17 +91,22 @@ sim_fits <-
         )
       )
     # generate datasets in list====
-    datasets <<- list()
-    sce <<- data.frame(
-      sim_num = integer(),
-      bias_beta = double(),
-      bias_relative_beta = double(),
-      bias_cure_frac = double(),
-      bias_relative_cure_frac = double(),
-      coverage_beta = double(),
-      coverage_cure_frac = double(),
-      AIC = double(),
-      BIC = double()
+    datasets <- list()
+    assign(
+      paste0("sce_", sce),
+      data.frame(
+        sim_num = integer(),
+        model = integer(),
+        bias_beta = double(),
+        bias_relative_beta = double(),
+        bias_cure_frac = double(),
+        bias_relative_cure_frac = double(),
+        coverage_beta = double(),
+        coverage_cure_frac = double(),
+        AIC = double(),
+        BIC = double(),
+        KL = double()
+      )
     )
     for (dataset in 1:n_datasets) {
       dat <- sim_cure_Weibull(
@@ -113,57 +119,81 @@ sim_fits <-
         theta = theta,
         cf_dep = cf_dep
       )
-      datasets[[dataset]] <<- dat
+      datasets[[dataset]] <- dat
     }
-
+    
     # fit model ====
-
+    
     for (dataset in 1:n_datasets) {
-      fit <- aft(
-        Surv(observed_time, delta) ~ X,
-        data = datasets[[dataset]],
-        df = df,
-        mixture = mixture,
-        cure = asymp,
-        use.gr = TRUE
-      )
-      # post estimation ====
-      bias_beta <- as.numeric(beta - coef(fit)[1])
-      bias_relative_beta <-
-        as.numeric((coef(fit)[1] - beta) / beta * 100)
-      
-      bias_cure_frac <- cure_frac - expit(coef(fit)[2])
-      bias_relative_cure_frac <-
-        (expit(coef(fit)[2]) - cure_frac) / cure_frac * 100
-      
-      coverage_beta <- beta  <=
-        as.numeric(coef(fit)[1]) + qnorm(0.975) * sqrt(fit@vcov[1, 1]) &
-        beta >= as.numeric(coef(fit)[1]) + qnorm(0.025) * sqrt(fit@vcov[1, 1])
-      
-      coverage_cure_frac <- cure_frac <=
-        expit(as.numeric(coef(fit)[2]) + qnorm(0.975) * sqrt(fit@vcov[2, 2])) &
-        cure_frac >=
-        expit(as.numeric(coef(fit)[2]) + qnorm(0.025) * sqrt(fit@vcov[2, 2]))
-      
-      
-      AIC <- AIC(fit)
-      BIC <- BIC(fit)
-      sce <<- rbind(
-        sce,
-        c(
-          as.integer(dataset),
-          bias_beta,
-          bias_relative_beta,
-          coverage_beta,
-          bias_cure_frac,
-          bias_relative_cure_frac,
-          coverage_cure_frac,
-          AIC,
-          BIC
-        )
-      )
-      
-      
+      for (mixture in c(TRUE, FALSE)) {
+        for (asymp in c(TRUE, FALSE)) {
+          fit <- aft_mixture(
+            Surv(observed_time, delta) ~ X,
+            cure.formula = Surv(observed_time, delta) ~ 1,
+            data = datasets[[dataset]],
+            df = df,
+            mixture = mixture,
+            cure = asymp,
+            use.gr = TRUE
+          )
+          print(summary(fit))
+          # post estimation ====
+          model <- switch (
+            paste0(mixture, asymp),
+            "TRUEFALSE" = 1,
+            "TRUETRUE" = 2,
+            "FALSETRUE" = 3,
+            "FALSEFALSE" = 4
+          )
+          
+          bias_beta <- as.numeric(beta - coef(fit)[1])
+          bias_relative_beta <-
+            as.numeric((coef(fit)[1] - beta) / beta * 100)
+          
+          bias_cure_frac <-
+            as.numeric(cure_frac - expit(coef(fit)[2]))
+          bias_relative_cure_frac <-
+            as.numeric((expit(coef(fit)[2]) - cure_frac) / cure_frac * 100)
+          
+          coverage_beta <- beta  <=
+            as.numeric(coef(fit)[1]) + qnorm(0.975) * sqrt(fit@vcov[1, 1]) &
+            beta >= as.numeric(coef(fit)[1]) + qnorm(0.025) * sqrt(fit@vcov[1, 1])
+          
+          coverage_cure_frac <- cure_frac <=
+            expit(as.numeric(coef(fit)[2]) + qnorm(0.975) * sqrt(fit@vcov[2, 2])) &
+            cure_frac >=
+            expit(as.numeric(coef(fit)[2]) + qnorm(0.025) * sqrt(fit@vcov[2, 2]))
+          
+          
+          AIC <- AIC(fit)
+          BIC <- BIC(fit)
+          KL = rstpm2:::KL_not_vectorized(
+            fit,
+            true_density = "mixture Weibull",
+            relative = TRUE,
+            shape = dist$shape,
+            scale = dist$scale,
+            beta = beta
+          )
+          sce <- rbind(
+            sce,
+            data.frame(
+              dataset = as.integer(dataset),
+              model = model,
+              bias_beta = bias_beta,
+              bias_relative_beta = bias_relative_beta,
+              coverage_beta = coverage_beta,
+              bias_cure_frac = bias_cure_frac,
+              bias_relative_cure_frac = bias_relative_cure_frac,
+              coverage_cure_frac = coverage_cure_frac,
+              AIC = AIC,
+              BIC = BIC,
+              KL = KL
+            )
+          )
+        }
+      }
     }
+    sce
   }
-sim_fits()
+results <- sim_fits()
