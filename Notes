@@ -1,11 +1,11 @@
 scenario 1
-  mixing_par = 0.8, shape = c(3,0.7), scale = t_scale(c(0.1,0.1),c(3,1.6))
+  mixing_par = 0.8, shape = c(3,0.7), scale = scale_tr(c(0.1,0.1),c(3,1.6))
 scenario 2 
-  mixing_par = 0.5, shape = c(3,0.7), scale = t_scale(c(1,1),c(1.5,0.5))
+  mixing_par = 0.5, shape = c(3,0.7), scale = scale_tr(c(1,1),c(1.5,0.5))
 scenario 3
-  mixing_par = 0.26, shape = c(3,0.7), scale = t_scale(c(0.02,0.5),c(3,0.7))
+  mixing_par = 0.26, shape = c(3,0.7), scale = scale_tr(c(0.02,0.5),c(3,0.7))
 scenario 4
-  mixing_par = 0.5, shape = c(1.2, 1.2), scale = t_scale(c(0.1, 0.1), c(1.2, 1.2))  
+  mixing_par = 0.5, shape = c(1.2, 1.2), scale = scale_tr(c(0.1, 0.1), c(1.2, 1.2))  
 
 
 # what else to record on sims
