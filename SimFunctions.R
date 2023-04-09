@@ -114,81 +114,85 @@ sim_fits <-
         )
         datasets[[dataset]] <- dat
       }
+      assign(paste0("datasets_sce_", sce, "_cf_", cure_frac),
+             datasets,
+             envir = parent.frame())
       
       # fit model ====
       
       ## ----
-      for (df in 2:9) {
+      for (df in 2:10) {
         for (mixture in c(TRUE, FALSE)) {
           for (asymp in c(TRUE, FALSE)) {
-            out = rbind(out, do.call(rbind, mclapply(
-              FUN = \(dataset) {
-                fit <- aft_mixture(
-                  Surv(observed_time, delta) ~ X,
-                  cure.formula = Surv(observed_time, delta) ~ 1,
-                  data = datasets[[dataset]],
-                  df = df,
-                  mixture = mixture,
-                  cure = asymp,
-                  use.gr = TRUE
-                )
-                # post estimation ====
-                model <- switch (
-                  paste0(mixture, asymp),
-                  "TRUEFALSE" = 1,
-                  "TRUETRUE" = 2,
-                  "FALSETRUE" = 3,
-                  "FALSEFALSE" = 4
-                )
-                
-                bias_beta <- as.numeric(beta - coef(fit)[1])
-                bias_relative_beta <-
-                  as.numeric((coef(fit)[1] - beta) / beta * 100)
-                
-                bias_cure_frac <-
-                  as.numeric(cure_frac - expit(coef(fit)[2]))
-                bias_relative_cure_frac <-
-                  as.numeric((expit(coef(fit)[2]) - cure_frac) / cure_frac * 100)
-                
-                coverage_beta <- beta  <=
-                  as.numeric(coef(fit)[1]) + qnorm(0.975) * sqrt(fit@vcov[1, 1]) &
-                  beta >= as.numeric(coef(fit)[1]) + qnorm(0.025) * sqrt(fit@vcov[1, 1])
-                
-                coverage_cure_frac <- cure_frac <=
-                  expit(as.numeric(coef(fit)[2]) + qnorm(0.975) * sqrt(fit@vcov[2, 2])) &
-                  cure_frac >=
-                  expit(as.numeric(coef(fit)[2]) + qnorm(0.025) * sqrt(fit@vcov[2, 2]))
-                
-                
-                AIC <- AIC(fit)
-                BIC <- BIC(fit)
-                
-                data.frame(
-                  sce = sce,
-                  cure_frac = cure_frac,
-                  sim_num = as.integer(dataset),
-                  model = model,
-                  df = df,
-                  bias_beta = bias_beta,
-                  bias_relative_beta = bias_relative_beta,
-                  coverage_beta = coverage_beta,
-                  bias_cure_frac = bias_cure_frac,
-                  bias_relative_cure_frac = bias_relative_cure_frac,
-                  coverage_cure_frac = coverage_cure_frac,
-                  AIC = AIC,
-                  BIC = BIC
-                )
-                
-                
-              },
-              1:n_datasets,
-              mc.cores = cores
-            )))
+            out = rbind(out, do.call(
+              rbind,
+              mclapply(
+                FUN = \(dataset) {
+                  fit <- aft_mixture(
+                    Surv(observed_time, delta) ~ X,
+                    cure.formula = Surv(observed_time, delta) ~ 1,
+                    data = datasets[[dataset]],
+                    df = df,
+                    mixture = mixture,
+                    cure = asymp,
+                    use.gr = TRUE
+                  )
+                  # post estimation ====
+                  model <- switch (
+                    paste0(mixture, asymp),
+                    "TRUEFALSE" = 1,
+                    "TRUETRUE" = 2,
+                    "FALSETRUE" = 3,
+                    "FALSEFALSE" = 4
+                  )
+                  
+                  bias_beta <- as.numeric(beta - coef(fit)[1])
+                  bias_relative_beta <-
+                    as.numeric((coef(fit)[1] - beta) / beta * 100)
+                  
+                  bias_cure_frac <-
+                    as.numeric(cure_frac - expit(coef(fit)[2]))
+                  bias_relative_cure_frac <-
+                    as.numeric((expit(coef(fit)[2]) - cure_frac) / cure_frac * 100)
+                  
+                  coverage_beta <- beta  <=
+                    as.numeric(coef(fit)[1]) + qnorm(0.975) * sqrt(fit@vcov[1, 1]) &
+                    beta >= as.numeric(coef(fit)[1]) + qnorm(0.025) * sqrt(fit@vcov[1, 1])
+                  
+                  coverage_cure_frac <- cure_frac <=
+                    expit(as.numeric(coef(fit)[2]) + qnorm(0.975) * sqrt(fit@vcov[2, 2])) &
+                    cure_frac >=
+                    expit(as.numeric(coef(fit)[2]) + qnorm(0.025) * sqrt(fit@vcov[2, 2]))
+                  
+                  
+                  AIC <- AIC(fit)
+                  BIC <- BIC(fit)
+                  
+                  data.frame(
+                    sce = sce,
+                    cure_frac = cure_frac,
+                    sim_num = as.integer(dataset),
+                    model = model,
+                    df = df,
+                    bias_beta = bias_beta,
+                    bias_relative_beta = bias_relative_beta,
+                    coverage_beta = coverage_beta,
+                    bias_cure_frac = bias_cure_frac,
+                    bias_relative_cure_frac = bias_relative_cure_frac,
+                    coverage_cure_frac = coverage_cure_frac,
+                    AIC = AIC,
+                    BIC = BIC
+                  )
+                  
+                  
+                },
+                1:n_datasets,
+                mc.cores = cores
+              )
+            ))
           }
         }
       }
     }
     out
   }
-
-
